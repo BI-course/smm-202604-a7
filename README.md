@@ -95,7 +95,7 @@
 
 ## Setup Instructions
 
-- [Setup Instructions](./admin_instructions/0_instructions_for_project_setup.md)
+- [Setup Instructions](./admin_instructions312./0_instructions_for_project_setup.md)
 
 ## Lab Manual
 
