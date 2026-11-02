@@ -232,7 +232,7 @@
   const API_ORIGIN = `${isSecure ? "https" : "http"}://${hostname}:${isSecure ? "443" : "5000"}`;
   const API_URL = `${API_ORIGIN}/api/v1/models/sme-revenue-regressor/predictions`;
 
-  // const API_URL = "http://127.0.0.1:5000/api/v1/models/sme-revenue-regressor/predictions";
+  const API_URL = "http://127.0.0.1:5000/api/v1/models/sme-revenue-regressor/predictions";
 
   document.getElementById("predictForm").addEventListener("submit", async function (e) {
     e.preventDefault();
