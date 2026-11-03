@@ -98,6 +98,8 @@ def build_input_row(payload, categorical_fields, numeric_fields):
 
 @app.errorhandler(ValueError)
 def handle_bad_input(error):
+    # Raised by our own checks and by the pipelines themselves (for example an
+    # OrdinalEncoder meeting a category it has never seen).
     return jsonify({"error": str(error)}), 400
 
 
@@ -122,7 +124,6 @@ def handle_bad_input(error):
 #              num_bedrooms=3; num_bathrooms=2; distance_to_cbd_km=5.5;
 #              service_charge_kes=15000; garage_size_sqm=0; security_rating=4;
 #              amenities_score=60; nearby_schools_count=3; has_garage=0} | ConvertTo-Json)
-#
 
 @app.route("/api/v1/models/rent-price-regressor/predictions", methods=["POST"])
 def predict_rent():
@@ -150,7 +151,7 @@ def predict_rent():
 #             "work_life_balance_score": 2, "distance_from_home_km": 18,
 #             "num_companies_worked_previously": 4,
 #             "remote_work_days_per_week": 0, "bonus_amount_kes": null}'
-#
+
 @app.route("/api/v1/models/employee-attrition-classifier/predictions", methods=["POST"])
 def predict_attrition():
     payload = get_json_body()
@@ -180,7 +181,7 @@ def predict_attrition():
 #        -d '{"monthly_revenue_kes": 1200000, "daily_foot_traffic": 400,
 #             "staff_count": 9, "store_size_sqm": 300,
 #             "avg_basket_size_kes": 120}'
-#
+
 @app.route("/api/v1/models/retail-store-segmenter/predictions", methods=["POST"])
 def predict_store_segment():
     payload = get_json_body()
@@ -255,5 +256,4 @@ def recommend_tracks():
 # -----------------------------------------------------------------------
 if __name__ == "__main__":
     app.run(debug=True)
-
 
