@@ -1,11 +1,12 @@
 gradio
 requests
-numpy
-pandas
+numpy<2.3
+pandas<3
 joblib==1.6.0
-scikit-learn==1.9.0
-imbalanced-learn==0.14.2
+scikit-learn==1.6.1
+imbalanced-learn==0.13.0
 imblearn
-mlxtend==0.25.0
+mlxtend==0.23.4
 flask
 flask-cors
+scipy<1.16
