@@ -1,3 +1,4 @@
+
 import os
 
 import joblib
@@ -12,8 +13,8 @@ CORS(app, resources={r"/api/*": {"origins": [
     "http://localhost:5000", "http://127.0.0.1:5000",
     "http://localhost:5500", "http://127.0.0.1:5500",
     "https://localhost:443", "https://127.0.0.1:443",
-    "http://localhost:63342",
-    "null",
+    "http://localhost:63342",  # VS Code Live Server extension
+    "null",  # allows opening a frontend .html file directly (file://) with no web server
 ]}})
 
 MODEL_DIR = "./model"
@@ -58,9 +59,8 @@ ATTRITION_NUMERIC = [
 
 STORE_NUMERIC = list(clustering_scaler.feature_names_in_)
 
-
 def get_json_body():
-    """Return the request's JSON body as a dict, or raise ValueError (-> 400)."""
+
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
         raise ValueError("Request body must be a JSON object "
@@ -69,15 +69,6 @@ def get_json_body():
 
 
 def build_input_row(payload, categorical_fields, numeric_fields):
-    """Check that every required field is present, then build a one-row
-    DataFrame with the columns in the order the artifact was fitted on.
-
-    JSON has no NaN and no int/float distinction: null arrives as None and
-    12 arrives as an int. The imputers inside the pipelines were fitted on
-    float columns where missing values are NaN, so numeric fields are cast to
-    float (None -> NaN) before the DataFrame is built. Categorical fields are
-    passed through untouched (None -> NaN so the imputer sees it as missing).
-    """
     required = categorical_fields + numeric_fields
     missing = [f for f in required if f not in payload]
     if missing:
@@ -98,9 +89,26 @@ def build_input_row(payload, categorical_fields, numeric_fields):
 
 @app.errorhandler(ValueError)
 def handle_bad_input(error):
-    # Raised by our own checks and by the pipelines themselves (for example an
-    # OrdinalEncoder meeting a category it has never seen).
     return jsonify({"error": str(error)}), 400
+
+@app.route("/", methods=["GET"])
+def index():
+    return jsonify({
+        "status": "API is running",
+        "how_to_use": "Send a POST request with a JSON body to one of these endpoints "
+                      "(use Postman or curl; a browser address bar only sends GET).",
+        "endpoints": [
+            "/api/v1/models/rent-price-regressor/predictions",
+            "/api/v1/models/employee-attrition-classifier/predictions",
+            "/api/v1/models/retail-store-segmenter/predictions",
+            "/api/v1/models/music-session-recommender/predictions",
+        ],
+    })
+
+
+@app.route("/favicon.ico")
+def favicon():
+    return "", 204
 
 
 # 1. REGRESSION -- predict the monthly rent (KES) of a property
@@ -114,23 +122,11 @@ def handle_bad_input(error):
 #             "service_charge_kes": 15000, "garage_size_sqm": 0,
 #             "security_rating": 4, "amenities_score": 60,
 #             "nearby_schools_count": 3, "has_garage": 0}'
-#
-# Sample request (PowerShell):
-#   Invoke-RestMethod -Method Post `
-#     -Uri "http://127.0.0.1:5000/api/v1/models/rent-price-regressor/predictions" `
-#     -ContentType "application/json" `
-#     -Body (@{property_type="Apartment"; neighborhood="Kilimani";
-#              furnishing_status="Semi-Furnished"; size_sqm=95;
-#              num_bedrooms=3; num_bathrooms=2; distance_to_cbd_km=5.5;
-#              service_charge_kes=15000; garage_size_sqm=0; security_rating=4;
-#              amenities_score=60; nearby_schools_count=3; has_garage=0} | ConvertTo-Json)
 
 @app.route("/api/v1/models/rent-price-regressor/predictions", methods=["POST"])
 def predict_rent():
     payload = get_json_body()
-
     input_row = build_input_row(payload, RENT_CATEGORICAL, RENT_NUMERIC)
-
     predicted_rent_kes = float(regression_model.predict(input_row)[0])
 
     return jsonify({
@@ -151,7 +147,6 @@ def predict_rent():
 #             "work_life_balance_score": 2, "distance_from_home_km": 18,
 #             "num_companies_worked_previously": 4,
 #             "remote_work_days_per_week": 0, "bonus_amount_kes": null}'
-
 @app.route("/api/v1/models/employee-attrition-classifier/predictions", methods=["POST"])
 def predict_attrition():
     payload = get_json_body()
@@ -181,7 +176,6 @@ def predict_attrition():
 #        -d '{"monthly_revenue_kes": 1200000, "daily_foot_traffic": 400,
 #             "staff_count": 9, "store_size_sqm": 300,
 #             "avg_basket_size_kes": 120}'
-
 @app.route("/api/v1/models/retail-store-segmenter/predictions", methods=["POST"])
 def predict_store_segment():
     payload = get_json_body()
@@ -207,7 +201,6 @@ def predict_store_segment():
 #   curl -X POST http://127.0.0.1:5000/api/v1/models/music-session-recommender/predictions \
 #        -H "Content-Type: application/json" \
 #        -d '{"session": ["M08", "M10"], "top_n": 3}'
-
 @app.route("/api/v1/models/music-session-recommender/predictions", methods=["POST"])
 def recommend_tracks():
     payload = get_json_body()
@@ -256,4 +249,3 @@ def recommend_tracks():
 # -----------------------------------------------------------------------
 if __name__ == "__main__":
     app.run(debug=True)
-
