@@ -7,10 +7,10 @@ api.py first (python api.py), then run this script separately.
 
 This mirrors api.py's four artifacts one-to-one:
 
-    1. Regression        -- /api/v1/models/sme-revenue-regressor/predictions
-    2. Classification     -- /api/v1/models/sme-credit-risk-classifier/predictions
-    3. Clustering         -- /api/v1/models/mall-customer-segmenter/predictions
-    4. Association Rule   -- /api/v1/models/ecommerce-recommender/predictions
+    1. Regression        -- /api/v1/models/rent-price-regressor/predictions
+    2. Classification     -- /api/v1/models/employee-attrition-classifier/predictions
+    3. Clustering         -- /api/v1/models/retail-store-segmenter/predictions
+    4. Association Rule   -- /api/v1/models/music-session-recommender/predictions
        Mining (ARM)
 
 Each call uses the same requests.post(..., json=payload, headers=headers)
@@ -55,60 +55,57 @@ def call_endpoint(path, payload):
     return None
 
 
-# 1. REGRESSION -- predict monthly revenue (KES) for an SME
+# 1. REGRESSION -- predict the monthly rent (KES) of a property
 
 regression_payload = {
-    "sector": "Technology", "county": "Nairobi", "quarter": "Q3",
-    "business_age_years": 4.5, "num_employees": 12,
-    "owner_education_level": "Secondary",
-    "monthly_marketing_spend_kes": 45000,
-    "avg_daily_foot_traffic": None,  # Technology sector: structurally not applicable
-    "online_presence_score": 78.0, "loan_amount_kes": 250000,
-    "interest_rate_pct": 14.5, "inflation_rate_pct": 6.5,
-    "competitor_density": 5, "customer_satisfaction_score": 4.2,
+    "property_type": "Apartment", "neighborhood": "Kilimani",
+    "furnishing_status": "Semi-Furnished", "size_sqm": 95,
+    "num_bedrooms": 3, "num_bathrooms": 2, "distance_to_cbd_km": 5.5,
+    "service_charge_kes": 15000, "garage_size_sqm": 0,
+    "security_rating": 4, "amenities_score": 60,
+    "nearby_schools_count": 3, "has_garage": 0,
 }
 
-result = call_endpoint("/api/v1/models/sme-revenue-regressor/predictions", regression_payload)
+result = call_endpoint("/api/v1/models/rent-price-regressor/predictions", regression_payload)
 if result is not None:
-    print("Predicted monthly revenue (KES) =", result["predicted_monthly_revenue_kes"])
+    print("Predicted monthly rent (KES) =", result["predicted_monthly_rent_kes"])
 
 print("-" * 60)
 
 
 
-# 2. CLASSIFICATION -- predict SME credit risk category (Low/Medium/High)
+# 2. CLASSIFICATION -- predict whether an employee is likely to leave (Yes/No)
 
 classification_payload = {
-    "sector": "Retail", "county": "Nairobi", "quarter": "Q2",
-    "loan_purpose": "Working Capital", "owner_education_level": "Secondary",
-    "business_age_years": 2.1, "num_employees": 4,
-    "monthly_revenue_kes": 850000, "loan_amount_kes": 150000,
-    "loan_term_months": 12, "interest_rate_pct": 16.5,
-    "collateral_value_kes": None,  # Working Capital loans are more often unsecured
-    "debt_to_income_ratio": 0.62,
-    "credit_score": 590, "num_previous_loans": 1,
-    "missed_payments_count": 3, "online_presence_score": 40.0,
-    "customer_satisfaction_score": 3.4, "competitor_density": 6,
+    "department": "Sales", "job_role_level": "Junior",
+    "education_level": "Bachelor's", "performance_rating": "Average",
+    "years_since_last_promotion": 4, "monthly_salary_kes": 65000,
+    "overtime_hours_per_month": 30, "job_satisfaction_score": 2,
+    "work_life_balance_score": 2, "distance_from_home_km": 18,
+    "num_companies_worked_previously": 4, "remote_work_days_per_week": 0,
+    "bonus_amount_kes": None,  # No bonus received: structurally missing
 }
 
-result = call_endpoint("/api/v1/models/sme-credit-risk-classifier/predictions", classification_payload)
+result = call_endpoint("/api/v1/models/employee-attrition-classifier/predictions", classification_payload)
 if result is not None:
-    print("Predicted credit risk category =", result["predicted_credit_risk_category"])
+    print("Predicted attrition (Yes = will leave) =", result["predicted_attrition"])
     print("Class probabilities =", result["class_probabilities"])
 
 print("-" * 60)
 
 
 
-# 3. CLUSTERING -- assign a new mall customer to an existing segment
+# 3. CLUSTERING -- assign a retail store to an existing segment
 
 clustering_payload = {
-    "Age": 27,
-    "Annual Income (k$)": 45,
-    "Spending Score (1-100)": 72,
+    "monthly_revenue_kes": 1200000,
+    "daily_foot_traffic": 400,
+    "staff_count": 9,
+    "store_size_sqm": 300,
+    "avg_basket_size_kes": 120,
 }
 
-result = call_endpoint("/api/v1/models/mall-customer-segmenter/predictions", clustering_payload)
+result = call_endpoint("/api/v1/models/retail-store-segmenter/predictions", clustering_payload)
 if result is not None:
     print("Assigned cluster =", result["assigned_cluster"])
 
@@ -116,14 +113,14 @@ print("-" * 60)
 
 
 
-# 4. ASSOCIATION RULE MINING -- recommend products for a shopping cart
+# 4. ASSOCIATION RULE MINING -- recommend tracks for a listening session
 
 recommendation_payload = {
-    "cart": ["P04", "P01"],
+    "session": ["M01", "M03"],
     "top_n": 3,
 }
 
-result = call_endpoint("/api/v1/models/ecommerce-recommender/predictions", recommendation_payload)
+result = call_endpoint("/api/v1/models/music-session-recommender/predictions", recommendation_payload)
 if result is not None:
-    print("Cart =", result["cart"])
+    print("Session =", result["session"])
     print("Recommendations =", result["recommendations"])
