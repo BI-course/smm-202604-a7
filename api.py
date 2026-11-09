@@ -1,10 +1,8 @@
-
 import os
-
 import joblib
 import numpy as np
 import pandas as pd
-from flask import Flask, jsonify, request
+from flask import Flask, abort, jsonify, redirect, request, send_from_directory
 from flask_cors import CORS
 
 app = Flask(__name__)
@@ -13,14 +11,13 @@ CORS(app, resources={r"/api/*": {"origins": [
     "http://localhost:5000", "http://127.0.0.1:5000",
     "http://localhost:5500", "http://127.0.0.1:5500",
     "https://localhost:443", "https://127.0.0.1:443",
-    "http://localhost:63342",  # VS Code Live Server extension
-    "null",  # allows opening a frontend .html file directly (file://) with no web server
+    "http://localhost:63342",
+    "null",
 ]}})
 
 MODEL_DIR = "./model"
 
 regression_model = joblib.load(os.path.join(MODEL_DIR, "rent_price_model.joblib"))
-
 classification_pipeline = joblib.load(
     os.path.join(MODEL_DIR, "logisticregression_classifier_for_employee_attrition.joblib")
 )
@@ -59,8 +56,9 @@ ATTRITION_NUMERIC = [
 
 STORE_NUMERIC = list(clustering_scaler.feature_names_in_)
 
-def get_json_body():
 
+def get_json_body():
+    """Return the request's JSON body as a dict, or raise ValueError (-> 400)."""
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
         raise ValueError("Request body must be a JSON object "
@@ -91,19 +89,49 @@ def build_input_row(payload, categorical_fields, numeric_fields):
 def handle_bad_input(error):
     return jsonify({"error": str(error)}), 400
 
+FRONTEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend")
+FRONTEND_FILES = {
+    "index.html",
+    "rent-price-regressor.html",
+    "employee-attrition-classifier.html",
+    "retail-store-segmenter.html",
+    "music-session-recommender.html",
+    "RequestFlow.jpg",
+    "Proxies.png",
+}
+
+
 @app.route("/", methods=["GET"])
 def index():
-    return jsonify({
-        "status": "API is running",
-        "how_to_use": "Send a POST request with a JSON body to one of these endpoints "
-                      "(use Postman or curl; a browser address bar only sends GET).",
-        "endpoints": [
-            "/api/v1/models/rent-price-regressor/predictions",
-            "/api/v1/models/employee-attrition-classifier/predictions",
-            "/api/v1/models/retail-store-segmenter/predictions",
-            "/api/v1/models/music-session-recommender/predictions",
-        ],
-    })
+    return send_from_directory(FRONTEND_DIR, "index.html")
+
+
+@app.route("/<filename>", methods=["GET"])
+def frontend_file(filename):
+    if filename not in FRONTEND_FILES:
+        abort(404)
+    return send_from_directory(FRONTEND_DIR, filename)
+ENDPOINT_PAGES = {
+    "rent-price-regressor": "rent-price-regressor.html",
+    "employee-attrition-classifier": "employee-attrition-classifier.html",
+    "retail-store-segmenter": "retail-store-segmenter.html",
+    "music-session-recommender": "music-session-recommender.html",
+}
+
+
+def _make_endpoint_page_view(page):
+    def view():
+        return redirect("/" + page)
+    return view
+
+
+for _model_name, _page in ENDPOINT_PAGES.items():
+    app.add_url_rule(
+        f"/api/v1/models/{_model_name}/predictions",
+        endpoint=f"page_for_{_model_name}",
+        view_func=_make_endpoint_page_view(_page),
+        methods=["GET"],
+    )
 
 
 @app.route("/favicon.ico")
@@ -133,7 +161,6 @@ def predict_rent():
         "predicted_monthly_rent_kes": round(predicted_rent_kes, 2),
         "model": "Ridge Regression (log1p target)",
     })
-
 
 # 2. CLASSIFICATION -- predict whether an employee is likely to leave (Yes/No)
 
@@ -176,6 +203,7 @@ def predict_attrition():
 #        -d '{"monthly_revenue_kes": 1200000, "daily_foot_traffic": 400,
 #             "staff_count": 9, "store_size_sqm": 300,
 #             "avg_basket_size_kes": 120}'
+
 @app.route("/api/v1/models/retail-store-segmenter/predictions", methods=["POST"])
 def predict_store_segment():
     payload = get_json_body()
@@ -201,6 +229,7 @@ def predict_store_segment():
 #   curl -X POST http://127.0.0.1:5000/api/v1/models/music-session-recommender/predictions \
 #        -H "Content-Type: application/json" \
 #        -d '{"session": ["M08", "M10"], "top_n": 3}'
+
 @app.route("/api/v1/models/music-session-recommender/predictions", methods=["POST"])
 def recommend_tracks():
     payload = get_json_body()
@@ -242,10 +271,5 @@ def recommend_tracks():
         "recommendations": recommendations,
         "model": "Apriori association rules, cleaned + precomputed lookup",
     })
-
-
-# -----------------------------------------------------------------------
-# Entry point
-# -----------------------------------------------------------------------
 if __name__ == "__main__":
     app.run(debug=True)
