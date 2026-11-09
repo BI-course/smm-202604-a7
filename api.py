@@ -6,18 +6,18 @@ from flask import Flask, abort, jsonify, redirect, request, send_from_directory
 from flask_cors import CORS
 
 app = Flask(__name__)
-
 CORS(app, resources={r"/api/*": {"origins": [
     "http://localhost:5000", "http://127.0.0.1:5000",
     "http://localhost:5500", "http://127.0.0.1:5500",
     "https://localhost:443", "https://127.0.0.1:443",
-    "http://localhost:63342",
-    "null",
+    "http://localhost:63342",  # VS Code Live Server extension
+    "null",  # allows opening a frontend .html file directly (file://) with no web server
 ]}})
 
 MODEL_DIR = "./model"
 
 regression_model = joblib.load(os.path.join(MODEL_DIR, "rent_price_model.joblib"))
+
 classification_pipeline = joblib.load(
     os.path.join(MODEL_DIR, "logisticregression_classifier_for_employee_attrition.joblib")
 )
@@ -90,16 +90,9 @@ def handle_bad_input(error):
     return jsonify({"error": str(error)}), 400
 
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend")
-FRONTEND_FILES = {
-    "index.html",
-    "rent-price-regressor.html",
-    "employee-attrition-classifier.html",
-    "retail-store-segmenter.html",
-    "music-session-recommender.html",
-    "RequestFlow.jpg",
-    "Proxies.png",
-}
 
+FRONTEND_EXTENSIONS = {".html", ".png", ".jpg", ".jpeg", ".gif", ".svg",
+                       ".css", ".js", ".ico"}
 
 @app.route("/", methods=["GET"])
 def index():
@@ -108,11 +101,13 @@ def index():
 
 @app.route("/<filename>", methods=["GET"])
 def frontend_file(filename):
-    if filename not in FRONTEND_FILES:
+    extension = os.path.splitext(filename)[1].lower()
+    if extension not in FRONTEND_EXTENSIONS or not os.path.isfile(os.path.join(FRONTEND_DIR, filename)):
         abort(404)
     return send_from_directory(FRONTEND_DIR, filename)
+
 ENDPOINT_PAGES = {
-    "rent-price-regressor": "rent-price-predictor.html",
+    "rent-price-regressor": "rent-price-regressor.html",
     "employee-attrition-classifier": "employee-attrition-classifier.html",
     "retail-store-segmenter": "retail-store-segmenter.html",
     "music-session-recommender": "music-session-recommender.html",
@@ -151,6 +146,7 @@ def favicon():
 #             "security_rating": 4, "amenities_score": 60,
 #             "nearby_schools_count": 3, "has_garage": 0}'
 
+
 @app.route("/api/v1/models/rent-price-regressor/predictions", methods=["POST"])
 def predict_rent():
     payload = get_json_body()
@@ -161,6 +157,7 @@ def predict_rent():
         "predicted_monthly_rent_kes": round(predicted_rent_kes, 2),
         "model": "Ridge Regression (log1p target)",
     })
+
 
 # 2. CLASSIFICATION -- predict whether an employee is likely to leave (Yes/No)
 
