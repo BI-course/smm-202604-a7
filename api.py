@@ -112,7 +112,7 @@ def frontend_file(filename):
         abort(404)
     return send_from_directory(FRONTEND_DIR, filename)
 ENDPOINT_PAGES = {
-    "rent-price-regressor": "rent-price-regressor.html",
+    "rent-price-regressor": "rent-price-predictor.html",
     "employee-attrition-classifier": "employee-attrition-classifier.html",
     "retail-store-segmenter": "retail-store-segmenter.html",
     "music-session-recommender": "music-session-recommender.html",
