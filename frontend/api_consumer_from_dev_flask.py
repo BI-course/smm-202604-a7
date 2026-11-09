@@ -1,9 +1,6 @@
 """
 api_consumer_from_dev_flask.py
 
-A frontend-style client that calls each of the four prediction endpoints
-exposed by api.py, running on the local Flask development server. Start
-api.py first (python api.py), then run this script separately.
 
 This mirrors api.py's four artifacts one-to-one:
 
