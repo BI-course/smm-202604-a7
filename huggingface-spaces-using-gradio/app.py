@@ -1,166 +1,216 @@
-import glob
-import os
 import gradio as gr
 import joblib
+import numpy as np
 import pandas as pd
-
-# Hugging Face's free Gradio hardware is ZeroGPU and some Spaces refuse to start unless one
-# function is decorated with @spaces.GPU. Nothing here needs a GPU; this no-op only satisfies
-# that platform check. Locally the `spaces` package does not exist, so we skip it.
-try:
-    import spaces
-
-    @spaces.GPU
-    def _warm_zerogpu():
-        return None
-
-    _warm_zerogpu()
-except ImportError:
-    pass
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-SEARCH_DIRS = [HERE, os.path.join(HERE, "model"), os.path.join(HERE, "..", "model"), os.getcwd(), os.path.join(os.getcwd(), "model")]
+import spaces
 
 
-def find_artifact(filename):
-    for d in SEARCH_DIRS:
-        for pattern in (filename, f"*_{filename}"):
-            hits = sorted(glob.glob(os.path.join(d, pattern)))
-            if hits:
-                return hits[-1]
-    raise FileNotFoundError(f"{filename} not found in {SEARCH_DIRS}")
+@spaces.GPU
+def _warm_zerogpu():
+    return None
 
 
-# Load all four artifacts ONCE at import time, exactly like api.py.
-rent_model = joblib.load(find_artifact("rent_price_model.joblib"))
-attrition_pipeline = joblib.load(find_artifact("logisticregression_classifier_for_employee_attrition.joblib"))
-store_artifact = joblib.load(find_artifact("kmeans_retail_store_segmentation.joblib"))
-arm_artifact = joblib.load(find_artifact("apriori_music_session_rules.joblib"))
-store_imputer, store_scaler, store_kmeans = store_artifact["imputer"], store_artifact["scaler"], store_artifact["kmeans"]
-recommendation_lookup, track_lookup = arm_artifact["recommendation_lookup"], arm_artifact["track_lookup"]
+_warm_zerogpu()
 
-SEGMENTS = {0: "Small neighbourhood stores", 1: "Flagship stores", 2: "High-traffic, low-basket convenience stores",
-            3: "Low-traffic, high-basket specialty stores", 4: "Mid-size core stores"}
-GARAGE_TYPES = {"Bungalow", "Maisonette", "Townhouse"}
-NAN = float("nan")
-TRACK_CHOICES = [(f"{r.item_name} ({t})", t) for t, r in track_lookup.sort_index().iterrows()]
+regression_model = joblib.load("rent_price_model.joblib")
+classification_pipeline = joblib.load("logisticregression_classifier_for_employee_attrition.joblib")
 
+clustering_artifact = joblib.load("kmeans_retail_store_segmentation.joblib")
+clustering_imputer = clustering_artifact["imputer"]
+clustering_scaler = clustering_artifact["scaler"]
+clustering_kmeans = clustering_artifact["kmeans"]
 
-def as_float_frame(row):
-    """Cast every numeric column to float64, as api.py does. Gradio's Number returns a Python int for
-    whole values (e.g. 8500), and the fitted imputers (trained on floats) reject int64 columns."""
-    numeric = [c for c in row.columns if not pd.api.types.is_object_dtype(row[c]) and not pd.api.types.is_string_dtype(row[c])]
-    return row.astype({c: "float64" for c in numeric})
+arm_artifact = joblib.load("apriori_music_session_rules.joblib")
+recommendation_lookup = arm_artifact["recommendation_lookup"]
+track_lookup = arm_artifact["track_lookup"]
 
 
-def need(**fields):
-    """Friendly error for empty Gradio inputs (cleared Number boxes arrive as None)."""
-    missing = [k for k, v in fields.items() if v is None or v == ""]
-    if missing:
-        raise gr.Error("Please fill in: " + ", ".join(missing))
+def _num(value):
+    """Gradio Number fields give None when left blank; the pipelines' imputers
+    were fitted on float columns with NaN as the missing marker."""
+    return np.nan if value is None else float(value)
 
 
-# 1. Regression ------------------------------------------------------------------------------------
-def predict_rent(property_type, neighborhood, furnishing, size, beds, baths, dist, service, garage, security, amenities, schools):
-    need(size=size, bedrooms=beds, bathrooms=baths, distance=dist, service_charge=service, amenities=amenities, schools=schools)
-    garage = garage or 0
-    row = pd.DataFrame([{
-        "property_type": property_type, "neighborhood": neighborhood, "furnishing_status": furnishing,
-        "size_sqm": size, "num_bedrooms": beds, "num_bathrooms": baths, "distance_to_cbd_km": dist,
-        "service_charge_kes": service, "garage_size_sqm": garage,
-        "security_rating": security if security and security >= 1 else NAN,
-        "amenities_score": amenities, "nearby_schools_count": schools,
-        "has_garage": 1.0 if (property_type in GARAGE_TYPES or garage > 0) else 0.0}])
-    # TransformedTargetRegressor: predict() already returns KES (no expm1 needed).
-    return f"KES {float(rent_model.predict(as_float_frame(row))[0]):,.0f} per month"
+# -----------------------------------------------------------------------
+# 1. Regression -- predict the monthly rent (KES) of a property
+# -----------------------------------------------------------------------
+def predict_rent(property_type, neighborhood, furnishing_status, size_sqm,
+                 num_bedrooms, num_bathrooms, distance_to_cbd_km,
+                 service_charge_kes, garage_size_sqm, security_rating,
+                 amenities_score, nearby_schools_count, has_garage):
+    input_row = pd.DataFrame([{
+        "property_type": property_type, "neighborhood": neighborhood,
+        "furnishing_status": furnishing_status, "size_sqm": _num(size_sqm),
+        "num_bedrooms": _num(num_bedrooms), "num_bathrooms": _num(num_bathrooms),
+        "distance_to_cbd_km": _num(distance_to_cbd_km),
+        "service_charge_kes": _num(service_charge_kes),
+        "garage_size_sqm": _num(garage_size_sqm),
+        "security_rating": _num(security_rating),
+        "amenities_score": _num(amenities_score),
+        "nearby_schools_count": _num(nearby_schools_count),
+        "has_garage": 1.0 if has_garage == "Yes" else 0.0,
+    }])
+
+    predicted_rent_kes = float(regression_model.predict(input_row)[0])
+    return f"KES {predicted_rent_kes:,.2f} / month"
 
 
-# 2. Classification --------------------------------------------------------------------------------
-def predict_attrition(dept, level, edu, perf, salary, bonus, overtime, promo, sat, wlb, distance, prev, remote):
-    need(salary=salary, overtime=overtime, years_since_promotion=promo, distance=distance, previous_employers=prev, remote_days=remote)
-    row = pd.DataFrame([{
-        "department": dept, "job_role_level": level, "education_level": edu, "performance_rating": perf,
-        "years_since_last_promotion": promo, "monthly_salary_kes": salary, "overtime_hours_per_month": overtime,
-        "job_satisfaction_score": sat, "work_life_balance_score": wlb, "distance_from_home_km": distance,
-        "num_companies_worked_previously": prev, "remote_work_days_per_week": remote,
-        "bonus_amount_kes": bonus if bonus and bonus > 0 else NAN}])
-    row = as_float_frame(row)
-    label = str(attrition_pipeline.predict(row)[0])
-    probs = dict(zip(attrition_pipeline.named_steps["model"].classes_, attrition_pipeline.predict_proba(row)[0]))
-    return (f"{'Likely to leave' if label == 'Yes' else 'Likely to stay'}  (prediction: {label})\n"
-            f"Probability of leaving: {probs['Yes']:.1%}\nProbability of staying: {probs['No']:.1%}")
+# -----------------------------------------------------------------------
+# 2. Classification -- predict employee attrition (Yes = likely to leave)
+# -----------------------------------------------------------------------
+def predict_attrition(department, job_role_level, education_level, performance_rating,
+                      years_since_last_promotion, monthly_salary_kes,
+                      overtime_hours_per_month, job_satisfaction_score,
+                      work_life_balance_score, distance_from_home_km,
+                      num_companies_worked_previously, remote_work_days_per_week,
+                      bonus_amount_kes):
+    input_row = pd.DataFrame([{
+        "department": department, "job_role_level": job_role_level,
+        "education_level": education_level, "performance_rating": performance_rating,
+        "years_since_last_promotion": _num(years_since_last_promotion),
+        "monthly_salary_kes": _num(monthly_salary_kes),
+        "overtime_hours_per_month": _num(overtime_hours_per_month),
+        "job_satisfaction_score": _num(job_satisfaction_score),
+        "work_life_balance_score": _num(work_life_balance_score),
+        "distance_from_home_km": _num(distance_from_home_km),
+        "num_companies_worked_previously": _num(num_companies_worked_previously),
+        "remote_work_days_per_week": _num(remote_work_days_per_week),
+        "bonus_amount_kes": _num(bonus_amount_kes or None),
+    }])
+    predicted_class = classification_pipeline.predict(input_row)[0]
+    predicted_probabilities = classification_pipeline.predict_proba(input_row)[0]
+    class_labels = classification_pipeline.named_steps["model"].classes_
+    probability_lines = "\n".join(
+        f"  {label}: {prob:.1%}" for label, prob in zip(class_labels, predicted_probabilities)
+    )
+    verdict = "likely to LEAVE" if predicted_class == "Yes" else "likely to STAY"
+    return f"Predicted attrition: {predicted_class} ({verdict})\n\n{probability_lines}"
 
 
-# 3. Clustering ------------------------------------------------------------------------------------
-def predict_segment(revenue, traffic, staff, sqm, basket):
-    need(revenue=revenue, visitors=traffic, staff=staff, size=sqm)
-    cols = list(store_scaler.feature_names_in_)
-    row = pd.DataFrame([[revenue, traffic, staff, sqm, basket if basket and basket > 0 else NAN]], columns=cols)
-    row = as_float_frame(row)
-    scaled = store_scaler.transform(pd.DataFrame(store_imputer.transform(row), columns=cols))
-    cluster = int(store_kmeans.predict(scaled)[0])
-    return f"Cluster {cluster}: {SEGMENTS[cluster]}"
+# -----------------------------------------------------------------------
+# 3. Clustering -- assign a retail store to an existing segment
+# -----------------------------------------------------------------------
+def predict_segment(monthly_revenue_kes, daily_foot_traffic, staff_count,
+                    store_size_sqm, avg_basket_size_kes):
+    columns = list(clustering_scaler.feature_names_in_)
+    input_row = pd.DataFrame([{
+        "monthly_revenue_kes": _num(monthly_revenue_kes),
+        "daily_foot_traffic": _num(daily_foot_traffic),
+        "staff_count": _num(staff_count),
+        "store_size_sqm": _num(store_size_sqm),
+        "avg_basket_size_kes": _num(avg_basket_size_kes),
+    }])[columns]
+    imputed = pd.DataFrame(clustering_imputer.transform(input_row), columns=columns)
+    scaled_input = clustering_scaler.transform(imputed)
+    cluster = int(clustering_kmeans.predict(scaled_input)[0])
+    return f"Assigned segment: Cluster {cluster}"
 
 
-# 4. Association rules -----------------------------------------------------------------------------
-def recommend_tracks(played, top_n):
-    session = set(played or [])
-    if not session:
-        raise gr.Error("Pick at least one track that has already played.")
+# -----------------------------------------------------------------------
+# 4. Association Rule Mining -- recommend tracks for a listening session
+# -----------------------------------------------------------------------
+def recommend_tracks(session_text, top_n):
+    session = {t.strip().upper() for t in session_text.split(",") if t.strip()}
     candidates = {}
-    for antecedent, consequents in recommendation_lookup.items():
+    for antecedent, consequent_list in recommendation_lookup.items():
         if antecedent.issubset(session):
-            for track, conf, lift in consequents:
-                if track not in session and (track not in candidates or conf > candidates[track][0]):
-                    candidates[track] = (conf, lift)
-    ranked = sorted(candidates.items(), key=lambda kv: kv[1][0], reverse=True)[: int(top_n or 3)]
+            for track_id, confidence, lift in consequent_list:
+                if track_id not in session:
+                    if track_id not in candidates or confidence > candidates[track_id][0]:
+                        candidates[track_id] = (confidence, lift)
+
+    ranked = sorted(candidates.items(), key=lambda item: item[1][0], reverse=True)[:int(top_n)]
     if not ranked:
-        return "No mined rule matches this session."
-    return "\n".join(f"{i}. {track_lookup.loc[t, 'item_name']} ({t}): confidence {c:.1%}, lift {l:.2f}"
-                     for i, (t, (c, l)) in enumerate(ranked, 1))
+        return "No recommendations for this session -- try a track combination seen in the training sessions (e.g. M01, M03)."
+
+    lines = [
+        f"{track_lookup.loc[track_id, 'item_name']} ({track_id}, {track_lookup.loc[track_id, 'category']})  --  "
+        f"confidence {confidence:.1%}, lift {lift:.2f}"
+        for track_id, (confidence, lift) in ranked
+    ]
+    return "\n".join(lines)
 
 
-# One Blocks app, four tabs --------------------------------------------------------------------------
 with gr.Blocks(title="BBT 4206 Model Validation Demos") as demo:
-    gr.Markdown("# BBT 4206: Model Validation Demos\nSame trained artifacts as the Flask API. Switch tabs to try each model.")
+    gr.Markdown("# BBT 4206 -- Model Validation Demos\nSwitch tabs to try a different model.")
 
-    with gr.Tab("Rent price (regression)"):
-        gr.Interface(fn=predict_rent, flagging_mode="never", inputs=[
-            gr.Dropdown(["Apartment", "Bungalow", "Maisonette", "Studio", "Townhouse"], value="Apartment", label="Property type"),
-            gr.Dropdown(["Karen", "Kilimani", "Ngong Road", "Ruaka", "South B", "Westlands"], value="Kilimani", label="Neighbourhood"),
-            gr.Dropdown(["Unfurnished", "Semi-Furnished", "Fully Furnished"], value="Semi-Furnished", label="Furnishing"),
-            gr.Number(75, label="Size (sqm)"), gr.Number(2, precision=0, label="Bedrooms"), gr.Number(2, precision=0, label="Bathrooms"),
-            gr.Number(7.4, label="Distance to CBD (km)"), gr.Number(8000, label="Service charge (KES/month)"),
-            gr.Number(0, label="Garage size (sqm, 0 = none)"), gr.Number(0, label="Security rating (1-5, 0 = unknown)"),
-            gr.Number(60, label="Amenities score (0-100)"), gr.Number(2, precision=0, label="Schools nearby"),
-        ], outputs=gr.Textbox(label="Predicted monthly rent"))
+    with gr.Tab("Rent Price Regressor"):
+        gr.Interface(
+            fn=predict_rent,
+            inputs=[
+                gr.Dropdown(label="Property Type",
+                            choices=["Apartment", "Bungalow", "Maisonette", "Studio", "Townhouse"],
+                            value="Apartment"),
+                gr.Dropdown(label="Neighborhood",
+                            choices=["Karen", "Kilimani", "Ngong Road", "Ruaka", "South B", "Westlands"],
+                            value="Kilimani"),
+                gr.Dropdown(label="Furnishing Status",
+                            choices=["Unfurnished", "Semi-Furnished", "Fully Furnished"],
+                            value="Semi-Furnished"),
+                gr.Number(label="Size (sqm)", value=95),
+                gr.Number(label="Bedrooms", value=3),
+                gr.Number(label="Bathrooms", value=2),
+                gr.Number(label="Distance to CBD (km)", value=5.5),
+                gr.Number(label="Service Charge (KES)", value=15000),
+                gr.Number(label="Garage Size (sqm)", value=0),
+                gr.Number(label="Security Rating (1-5)", value=4),
+                gr.Number(label="Amenities Score (0-100)", value=60),
+                gr.Number(label="Nearby Schools", value=3),
+                gr.Radio(label="Has Garage", choices=["No", "Yes"], value="No"),
+            ],
+            outputs=gr.Textbox(label="Predicted Monthly Rent"),
+        )
 
-    with gr.Tab("Employee attrition (classification)"):
-        gr.Interface(fn=predict_attrition, flagging_mode="never", inputs=[
-            gr.Dropdown(["Engineering", "Finance", "HR", "Operations", "Sales"], value="Sales", label="Department"),
-            gr.Dropdown(["Junior", "Mid", "Senior", "Lead"], value="Mid", label="Job level"),
-            gr.Dropdown(["Diploma", "Bachelor's", "Master's", "PhD"], value="Bachelor's", label="Education"),
-            gr.Dropdown(["Low", "Average", "High", "Outstanding"], value="Average", label="Performance rating"),
-            gr.Number(68000, label="Monthly salary (KES)"), gr.Number(8500, label="Bonus (KES, 0 = no bonus scheme)"),
-            gr.Number(34, label="Overtime (hours/month)"), gr.Number(6.5, label="Years since last promotion"),
-            gr.Slider(1, 5, value=1.8, step=0.1, label="Job satisfaction (1-5)"),
-            gr.Slider(1, 5, value=1.9, step=0.1, label="Work-life balance (1-5)"),
-            gr.Number(22, label="Distance from home (km)"), gr.Number(3, precision=0, label="Previous employers"),
-            gr.Number(0, precision=0, label="Remote days per week"),
-        ], outputs=gr.Textbox(label="Prediction"))
+    with gr.Tab("Employee Attrition Classifier"):
+        gr.Interface(
+            fn=predict_attrition,
+            inputs=[
+                gr.Dropdown(label="Department",
+                            choices=["Engineering", "Finance", "HR", "Operations", "Sales"],
+                            value="Sales"),
+                gr.Dropdown(label="Job Role Level",
+                            choices=["Junior", "Mid", "Senior", "Lead"], value="Junior"),
+                gr.Dropdown(label="Education Level",
+                            choices=["Diploma", "Bachelor's", "Master's", "PhD"],
+                            value="Bachelor's"),
+                gr.Dropdown(label="Performance Rating",
+                            choices=["Low", "Average", "High", "Outstanding"],
+                            value="Average"),
+                gr.Number(label="Years Since Last Promotion", value=4),
+                gr.Number(label="Monthly Salary (KES)", value=65000),
+                gr.Number(label="Overtime Hours per Month", value=30),
+                gr.Number(label="Job Satisfaction Score (1-5)", value=2),
+                gr.Number(label="Work-Life Balance Score (1-5)", value=2),
+                gr.Number(label="Distance From Home (km)", value=18),
+                gr.Number(label="Previous Companies Worked", value=4),
+                gr.Number(label="Remote Work Days per Week", value=0),
+                gr.Number(label="Bonus Amount (KES) (leave 0 if none)", value=0),
+            ],
+            outputs=gr.Textbox(label="Predicted Attrition"),
+        )
 
-    with gr.Tab("Store segment (clustering)"):
-        gr.Interface(fn=predict_segment, flagging_mode="never", inputs=[
-            gr.Number(620000, label="Monthly revenue (KES)"), gr.Number(640, label="Visitors per day"),
-            gr.Number(7, precision=0, label="Staff"), gr.Number(210, label="Store size (sqm)"),
-            gr.Number(48, label="Average basket (KES, 0 = unknown)"),
-        ], outputs=gr.Textbox(label="Segment"))
+    with gr.Tab("Retail Store Segmenter"):
+        gr.Interface(
+            fn=predict_segment,
+            inputs=[
+                gr.Number(label="Monthly Revenue (KES)", value=1200000),
+                gr.Number(label="Daily Foot Traffic", value=400),
+                gr.Number(label="Staff Count", value=9),
+                gr.Number(label="Store Size (sqm)", value=300),
+                gr.Number(label="Average Basket Size (KES)", value=120),
+            ],
+            outputs=gr.Textbox(label="Prediction"),
+        )
 
-    with gr.Tab("Play Next (association rules)"):
-        gr.Interface(fn=recommend_tracks, flagging_mode="never", inputs=[
-            gr.CheckboxGroup(TRACK_CHOICES, value=["M08", "M10"], label="Tracks already played"),
-            gr.Number(3, precision=0, minimum=1, maximum=10, label="How many suggestions"),
-        ], outputs=gr.Textbox(label="Recommendations"))
+    with gr.Tab("Music Session Recommender"):
+        gr.Interface(
+            fn=recommend_tracks,
+            inputs=[
+                gr.Textbox(label="Session (comma-separated track ids)", value="M01, M03"),
+                gr.Number(label="Top N Recommendations", value=3),
+            ],
+            outputs=gr.Textbox(label="Recommendations"),
+        )
 
 if __name__ == "__main__":
     demo.launch()
