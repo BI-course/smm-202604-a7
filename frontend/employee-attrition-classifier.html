@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Employee Attrition Classifier</title>
+<style>
+  :root {
+    --accent: #0891b2;
+    --accent-dark: #0e7490;
+    --bg: #f3f4f6;
+    --card: #ffffff;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --ok-bg: #ecfeff;
+    --err-bg: #fef2f2;
+    --err-text: #b91c1c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    justify-content: center;
+    padding: 32px 16px 64px;
+  }
+  .card {
+    background: var(--card);
+    border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.06);
+    max-width: 560px;
+    width: 100%;
+    padding: 32px 32px 28px;
+  }
+  .back-link { display: inline-block; margin-bottom: 16px; color: var(--muted); text-decoration: none; font-size: 14px; }
+  .back-link:hover { color: var(--accent); }
+  .badge {
+    display: inline-block; background: var(--ok-bg); color: var(--accent-dark);
+    font-size: 12px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase;
+    padding: 4px 10px; border-radius: 999px; margin-bottom: 10px;
+  }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  p.lead { color: var(--muted); font-size: 14px; margin: 0 0 24px; }
+  label { display: block; font-size: 13px; font-weight: 600; margin: 16px 0 6px; }
+  label .hint { font-weight: 400; color: var(--muted); }
+  input, select {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--border);
+    border-radius: 10px; font-size: 14px; background: #fff; color: var(--text);
+  }
+  input:focus, select:focus {
+    outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(8,145,178,0.15);
+  }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  button {
+    width: 100%; margin-top: 24px; padding: 12px 16px; background: var(--accent);
+    color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 600;
+    cursor: pointer; transition: background 0.15s ease;
+  }
+  button:hover { background: var(--accent-dark); }
+  button:disabled { background: #7dd3e8; cursor: default; }
+  #result { margin-top: 20px; padding: 16px; border-radius: 10px; font-size: 14px; display: none; }
+  #result.show { display: block; }
+  #result.ok { background: var(--ok-bg); color: var(--accent-dark); }
+  #result.err { background: var(--err-bg); color: var(--err-text); }
+  #result .figure { font-size: 22px; font-weight: 700; margin-top: 4px; }
+  .prob-bar { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 13px; }
+  .prob-bar .track { flex: 1; height: 6px; background: #d1f5fb; border-radius: 3px; overflow: hidden; }
+  .prob-bar .fill { height: 100%; background: var(--accent); }
+</style>
+</head>
+<body>
+  <div class="card">
+    <a class="back-link" href="index.html">&larr; All endpoints</a>
+    <span class="badge">Classification</span>
+    <h1>Employee Attrition Classifier</h1>
+    <p class="lead">Calls <code>POST /api/v1/models/employee-attrition-classifier/predictions</code></p>
+
+    <form id="predictForm">
+      <div class="row">
+        <div>
+          <label for="department">Department</label>
+          <select id="department" required>
+            <option>Engineering</option><option>Finance</option><option>HR</option>
+            <option>Operations</option><option selected>Sales</option>
+          </select>
+        </div>
+        <div>
+          <label for="job_role_level">Job Role Level</label>
+          <select id="job_role_level" required>
+            <option selected>Junior</option><option>Mid</option><option>Senior</option><option>Lead</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="education_level">Education Level</label>
+          <select id="education_level" required>
+            <option>Diploma</option><option selected>Bachelor's</option><option>Master's</option><option>PhD</option>
+          </select>
+        </div>
+        <div>
+          <label for="performance_rating">Performance Rating</label>
+          <select id="performance_rating" required>
+            <option>Low</option><option selected>Average</option><option>High</option><option>Outstanding</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="monthly_salary_kes">Monthly Salary (KES)</label>
+          <input type="number" id="monthly_salary_kes" min="0" value="65000" required>
+        </div>
+        <div>
+          <label for="bonus_amount_kes">Bonus (KES) <span class="hint">(blank if none)</span></label>
+          <input type="number" id="bonus_amount_kes" min="0" placeholder="e.g. 50000">
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="years_since_last_promotion">Years Since Last Promotion</label>
+          <input type="number" id="years_since_last_promotion" min="0" step="0.1" value="4" required>
+        </div>
+        <div>
+          <label for="num_companies_worked_previously">Previous Companies</label>
+          <input type="number" id="num_companies_worked_previously" min="0" value="4" required>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="overtime_hours_per_month">Overtime (hours / month)</label>
+          <input type="number" id="overtime_hours_per_month" min="0" value="30" required>
+        </div>
+        <div>
+          <label for="distance_from_home_km">Distance From Home (km)</label>
+          <input type="number" id="distance_from_home_km" min="0" step="0.1" value="18" required>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="job_satisfaction_score">Job Satisfaction (1-5)</label>
+          <input type="number" id="job_satisfaction_score" min="1" max="5" step="0.1" value="2" required>
+        </div>
+        <div>
+          <label for="work_life_balance_score">Work-Life Balance (1-5)</label>
+          <input type="number" id="work_life_balance_score" min="1" max="5" step="0.1" value="2" required>
+        </div>
+      </div>
+
+      <label for="remote_work_days_per_week">Remote Work Days / Week</label>
+      <input type="number" id="remote_work_days_per_week" min="0" max="5" step="1" value="0" required>
+
+      <button type="submit" id="submitBtn">Predict Attrition Risk</button>
+    </form>
+
+    <div id="result"></div>
+  </div>
+
+<script>
+  const protocol = window.location.protocol;                 // "http:", "https:", or "file:"
+  const hostname = window.location.hostname || "127.0.0.1";  // hostname is "" for a file:// page
+  const isSecure = protocol === "https:";
+
+  const API_ORIGIN = `${isSecure ? "https" : "http"}://${hostname}:${isSecure ? "443" : "5000"}`;
+  const API_URL = `${API_ORIGIN}/api/v1/models/employee-attrition-classifier/predictions`;
+
+  // const API_URL = "http://127.0.0.1:5000/api/v1/models/employee-attrition-classifier/predictions";
+
+  // Read the API's own {"error": "..."} message when it rejects a request
+  // (e.g. a missing field), instead of dumping the raw response body.
+  async function readError(response) {
+    try {
+      const body = await response.json();
+      if (body && body.error) return body.error;
+    } catch (_) { /* not JSON */ }
+    return `Server responded ${response.status}`;
+  }
+
+  // Blank number field -> null (the pipeline's imputer handles it);
+  // anything non-numeric is rejected before a request is sent.
+  function numOrNull(id) {
+    const raw = document.getElementById(id).value.trim();
+    return raw === "" ? null : Number(raw);
+  }
+
+  document.getElementById("predictForm").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    const submitBtn = document.getElementById("submitBtn");
+    const result = document.getElementById("result");
+
+    // A blank bonus field means "no bonus received" -- send null, not an
+    // empty string, exactly what the pipeline's imputer + missingness
+    // indicator already expects.
+    const payload = {
+      department: document.getElementById("department").value,
+      job_role_level: document.getElementById("job_role_level").value,
+      education_level: document.getElementById("education_level").value,
+      performance_rating: document.getElementById("performance_rating").value,
+      years_since_last_promotion: numOrNull("years_since_last_promotion"),
+      monthly_salary_kes: numOrNull("monthly_salary_kes"),
+      overtime_hours_per_month: numOrNull("overtime_hours_per_month"),
+      job_satisfaction_score: numOrNull("job_satisfaction_score"),
+      work_life_balance_score: numOrNull("work_life_balance_score"),
+      distance_from_home_km: numOrNull("distance_from_home_km"),
+      num_companies_worked_previously: numOrNull("num_companies_worked_previously"),
+      remote_work_days_per_week: numOrNull("remote_work_days_per_week"),
+      bonus_amount_kes: numOrNull("bonus_amount_kes"),
+    };
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Predicting...";
+    result.className = "";
+
+    try {
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) throw new Error(await readError(response));
+      const data = await response.json();
+
+      const probRows = Object.entries(data.class_probabilities)
+        .sort((a, b) => b[1] - a[1])
+        .map(([label, prob]) => `
+          <div class="prob-bar">
+            <span style="width:64px;">${label === "Yes" ? "Leaves" : "Stays"}</span>
+            <div class="track"><div class="fill" style="width:${(prob * 100).toFixed(0)}%"></div></div>
+            <span>${(prob * 100).toFixed(1)}%</span>
+          </div>`).join("");
+
+      result.className = "show ok";
+      result.innerHTML =
+        `Model: ${data.model}` +
+        `<div class="figure">${data.predicted_attrition === "Yes" ? "Likely to leave" : "Likely to stay"}</div>` +
+        probRows;
+    } catch (err) {
+      result.className = "show err";
+      result.textContent = "Request failed: " + err.message +
+        ` (is api.py running and reachable at ${API_ORIGIN} ?)`;
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Predict Attrition Risk";
+    }
+  });
+</script>
+</body>
+</html>
