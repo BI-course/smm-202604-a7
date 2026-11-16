@@ -184,4 +184,4 @@ with tab_arm:
             for track_id, (confidence, lift) in ranked:
                 st.write(f"**{track_lookup.loc[track_id, 'item_name']}** ({track_id}, "
                          f"{track_lookup.loc[track_id, 'category']}) "
-                         f"-- confidence {confidence:.1%}, lift {lift:.2f}")
+                         f"-- confidence {confidence:.1%}, lift {lift:.3f}")
