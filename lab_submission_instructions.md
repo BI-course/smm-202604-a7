@@ -24,9 +24,9 @@
 
 | **Details**                                                                                                                           | **Comment** |
 |:--------------------------------------------------------------------------------------------------------------------------------------|:------------|
-| **Student ID**                                                                                                                        |             |
-| **Name**                                                                                                                              |             |
-| **What part of the lab did you personally<br/>contribute to (provide a link to the<br/>branch(es)), and what did you learn from it?** |             |
+| **Student ID**                                                                                                                        | 158733           |
+| **Name**                                                                                                                              | Brandon Nthiwa   |
+| **What part of the lab did you personally<br/>contribute to (provide a link to the<br/>branch(es)), and what did you learn from it?** | I worked on the Rent Price Predictor component and also updated the HTML. I also worked on updating the Hugging Face requirements to ensure compatibility with the models used in the project. These tasks helped improve the integration and functionality of the group's application. https://github.com/BI-course/smm-202604-a7/tree/feature/brandon|
 
 **Member 4:**
 
