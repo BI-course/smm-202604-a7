@@ -46,13 +46,13 @@
 
 ## Chosen Level of Difficulty
 
-**Specify the chosen level of difficulty** (baseline, intermediate, or advanced):
+**Specify the chosen level of difficulty** (baseline, intermediate, or advanced): Advanced
 
 ## Video Demonstration
 
 Submit the link to a short video (**not more than 10 minutes**) demonstrating your complete solution at whichever difficulty level you chose. Please ensure that the lecturer has rights to view the video.
 
-At minimum, the video must show, in one continuous walkthrough:
+At minimum, the video must show, in one continuous walkthrough: https://drive.google.com/file/d/1GcCWTMuqN3vcUZo5phm5Epf2GRxZgs2c/view?usp=drive_link
 
 1. `api.py` running **locally**, with a live request/response against each model endpoint you implemented.
 2. If you attempted the Intermediate or Advanced tier: the same API running inside its **Gunicorn + Nginx Docker container**, reached through the reverse proxy, not the Flask development server.
@@ -70,7 +70,7 @@ Fill in only the rows that apply to your chosen difficulty level (see Part C bel
 
 | **Deployment target**                             | **URL**                                                           |
 |:--------------------------------------------------|:------------------------------------------------------------------|
-| Render (the full `api.py`, all endpoints)         |                                                                   |
+| Render (the full `api.py`, all endpoints)         |        https://smm-202604-a7.onrender.com/                                                           |
 | Hugging Face Space (Gradio, one tab per model)    | https://huggingface.co/spaces/dongax/model-validation-demos       |
 | Streamlit Community Cloud app (one tab per model) | https://smm-202604-a7.streamlit.app/                              |
 
