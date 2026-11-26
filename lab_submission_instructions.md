@@ -52,7 +52,7 @@
 
 Submit the link to a short video (**not more than 10 minutes**) demonstrating your complete solution at whichever difficulty level you chose. Please ensure that the lecturer has rights to view the video.
 
-At minimum, the video must show, in one continuous walkthrough: https://drive.google.com/file/d/1GcCWTMuqN3vcUZo5phm5Epf2GRxZgs2c/view?usp=drive_link
+At minimum, the video must show, in one continuous walkthrough: https://drive.google.com/file/d/1AJh5a15NOHJn0ZcGcynckBEJPeZMoyMO/view?usp=sharing
 
 1. `api.py` running **locally**, with a live request/response against each model endpoint you implemented.
 2. If you attempted the Intermediate or Advanced tier: the same API running inside its **Gunicorn + Nginx Docker container**, reached through the reverse proxy, not the Flask development server.
@@ -63,7 +63,7 @@ At minimum, the video must show, in one continuous walkthrough: https://drive.go
 Note that you are required to submit the link to the video and NOT the video itself. The video should NOT be uploaded to your repository—that would be a misuse of GitHub.
 
 **Link to the video:**
-
+https://drive.google.com/file/d/1AJh5a15NOHJn0ZcGcynckBEJPeZMoyMO/view?usp=sharing
 ## Public URLs
 
 Fill in only the rows that apply to your chosen difficulty level (see Part C below). Leave a row blank if your tier does not require that deployment target.
